@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sciagent"
+version = "0.1.0"
+description = "Lightweight RunGuardian/SciPilot-style training run wrapper"
+readme = "README.md"
+authors = [
+  { name = "RunGuardian Team" }
+]
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = [
+  "pyyaml>=6.0",
+  "rich>=13.0.0",
+  "questionary>=2.0.0",
+  "psutil>=5.9.0",
+  "openai>=1.0.0",
+  "python-dotenv>=1.0.0"
+]
+
+[project.optional-dependencies]
+tests = []
+
+[project.scripts]
+sciagent = "sciagent.cli:main"
+
+[tool.setuptools]
+packages = ["sciagent"]
+
+[tool.setuptools.package-data]
+sciagent = ["*.yaml", "*.json"]
