@@ -120,10 +120,10 @@ sciagent history
 sciagent analyze --last
 ```
 
-## 6️⃣ 一键生成周报
+## 6️⃣ 一键生成日报/周报/月报
 
 ```bash
-sciagent weekly
+sciagent daily/weekly/monthly
 ```
 
 ---
@@ -148,7 +148,7 @@ sciagent weekly
 
 ---
 
-## 2. AI 智能分析（核心优势）
+## 2. AI 智能分析
 
 ```bash
 sciagent analyze --last
@@ -273,7 +273,3 @@ MIT License
 ---
 
 **让科研与实验管理更高效、更智能。欢迎 Star ⭐ 支持项目！**
-
-```
-
----
