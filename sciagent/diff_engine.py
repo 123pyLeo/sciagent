@@ -60,43 +60,57 @@ def _diff_configs(current: Dict[str, object], reference_config: Dict[str, object
     """
     对比配置差异
     
-    特殊处理：如果 reference_config 的 _tracked_params 是 None，
-    尝试从 full_reference 的 metrics 中提取参数值
+    会自动展开嵌套字典（如 _code_config、_tracked_params），
+    只显示实际变化的参数。
     
     Args:
         current: 当前运行的 config_values
         reference_config: 参考运行的 config_values
         full_reference: 完整的参考运行记录（包含 metrics）
     """
-    reference = dict(reference_config)  # 复制一份避免修改原始数据
+    # 展开嵌套字典
+    current_flat = _flatten_config(current)
+    reference_flat = _flatten_config(reference_config)
     
-    # 如果当前有 _tracked_params 但 reference 没有，尝试从 metrics 提取
-    if "_tracked_params" in current and current["_tracked_params"] is not None:
-        if "_tracked_params" not in reference or reference["_tracked_params"] is None:
-            # 尝试从完整记录的 metrics 提取参数
-            if full_reference:
-                ref_metrics = full_reference.get("metrics", {})
-                if isinstance(ref_metrics, dict):
-                    # 提取常见的参数字段
-                    param_keys = ["learning_rate", "lr", "batch_size", "epochs", 
-                                 "optimizer", "model_type", "hidden_size", "dropout"]
-                    extracted_params = {}
-                    for key in param_keys:
-                        if key in ref_metrics:
-                            extracted_params[key] = ref_metrics[key]
-                    
-                    if extracted_params:
-                        # 加入提取的参数
-                        reference["_tracked_params"] = extracted_params
-    
-    keys = sorted(set(current) | set(reference))
+    keys = sorted(set(current_flat) | set(reference_flat))
     diffs: List[ConfigDiffEntry] = []
+    
     for key in keys:
-        cur_val = current.get(key)
-        ref_val = reference.get(key)
+        cur_val = current_flat.get(key)
+        ref_val = reference_flat.get(key)
         if cur_val != ref_val:
             diffs.append(ConfigDiffEntry(key=key, current=cur_val, reference=ref_val))
+    
     return diffs
+
+
+def _flatten_config(config: Dict[str, object], prefix: str = "") -> Dict[str, object]:
+    """
+    展开嵌套的配置字典
+    
+    例如：
+        {"_code_config": {"lr": 0.001, "batch_size": 32}}
+    变成：
+        {"lr": 0.001, "batch_size": 32}
+    """
+    result: Dict[str, object] = {}
+    
+    # 需要展开的特殊 key
+    nested_keys = {"_code_config", "_tracked_params", "_cmd_params"}
+    
+    for key, value in config.items():
+        if key in nested_keys and isinstance(value, dict):
+            # 展开嵌套字典，不加前缀
+            for inner_key, inner_value in value.items():
+                result[inner_key] = inner_value
+        elif isinstance(value, dict) and not key.startswith("_"):
+            # 其他字典用点号展开
+            for inner_key, inner_value in value.items():
+                result[f"{key}.{inner_key}"] = inner_value
+        else:
+            result[key] = value
+    
+    return result
 
 
 def _diff_metric(record: RunRecord, reference: Dict[str, object]) -> Optional[Dict[str, float]]:

@@ -22,16 +22,17 @@ class ReportGenerator:
         """渲染当前配置信息"""
         lines = []
         
-        # 命令行参数
-        if record.config_values and "_cmd_params" in record.config_values:
-            cmd_params = record.config_values["_cmd_params"]
-            if isinstance(cmd_params, dict) and cmd_params:
-                lines.append("### Command Parameters")
-                lines.append("| Parameter | Value |")
-                lines.append("| --- | --- |")
-                for key, value in cmd_params.items():
-                    lines.append(f"| `{key}` | {value} |")
-                lines.append("")
+        # 展开所有配置（包括 _code_config, _cmd_params, _tracked_params）
+        all_params = {}
+        nested_keys = {"_code_config", "_tracked_params", "_cmd_params"}
+        
+        if record.config_values:
+            for key, value in record.config_values.items():
+                if key in nested_keys and isinstance(value, dict):
+                    # 展开嵌套字典
+                    all_params.update(value)
+                elif not key.startswith("_"):
+                    all_params[key] = value
         
         # Metadata
         if record.metadata:
@@ -42,16 +43,23 @@ class ReportGenerator:
                 lines.append(f"| `{key}` | {value} |")
             lines.append("")
         
-        # 配置文件内容（排除 _cmd_params）
-        config_items = {k: v for k, v in record.config_values.items() if k != "_cmd_params"} if record.config_values else {}
-        if config_items:
-            lines.append("### Config Files")
-            lines.append("| Key | Value |")
+        # 配置参数（展开后的）
+        if all_params:
+            lines.append("### Parameters")
+            lines.append("| Parameter | Value |")
             lines.append("| --- | --- |")
-            for key, value in list(config_items.items())[:20]:  # 限制显示前20个
-                lines.append(f"| `{key}` | {value} |")
-            if len(config_items) > 20:
-                lines.append(f"| ... | *{len(config_items) - 20} more items* |")
+            for key, value in sorted(all_params.items())[:25]:  # 限制显示前25个
+                # 格式化显示
+                if isinstance(value, float):
+                    if value < 0.001 and value != 0:
+                        display_val = f"{value:.2e}"
+                    else:
+                        display_val = f"{value:.6g}"
+                else:
+                    display_val = value
+                lines.append(f"| `{key}` | {display_val} |")
+            if len(all_params) > 25:
+                lines.append(f"| ... | *{len(all_params) - 25} more items* |")
             lines.append("")
         
         return "\n".join(lines) if lines else "*No configuration data*"
@@ -170,30 +178,31 @@ def _render_metrics(record: RunRecord, reference_record: Optional[RunRecord] = N
 
 def _render_config_diff(diff: DiffResult) -> str:
     if not diff.config_differences:
-        return "*No changes from previous run. Current configuration shown in metadata below.*"
+        return "*No changes from previous run.*"
     
     lines = []
-    for entry in diff.config_differences[:15]:
+    for entry in diff.config_differences[:20]:
         key = entry.key
         current = entry.current
         reference = entry.reference
         
-        # 特殊处理 _tracked_params（展开显示）
-        if key == "_tracked_params" and isinstance(current, dict) and isinstance(reference, dict):
-            lines.append("**参数变化**：\n")
-            # 获取所有参数的键
-            all_keys = sorted(set(current.keys()) | set(reference.keys()))
-            for param_key in all_keys:
-                cur_val = current.get(param_key, "—")
-                ref_val = reference.get(param_key, "—")
-                if cur_val != ref_val:
-                    lines.append(f"- **{param_key}**: `{ref_val}` → `{cur_val}`")
-        else:
-            # 其他配置项
-            lines.append(f"- **{key}**: `{reference}` → `{current}`")
+        # 格式化显示值
+        def format_val(v):
+            if v is None:
+                return "—"
+            if isinstance(v, float):
+                if v < 0.001 and v != 0:
+                    return f"{v:.2e}"
+                return f"{v:.6g}"
+            return str(v)
+        
+        cur_str = format_val(current)
+        ref_str = format_val(reference)
+        
+        lines.append(f"- **{key}**: `{ref_str}` → `{cur_str}`")
     
-    if len(diff.config_differences) > 15:
-        lines.append(f"\n*… 还有 {len(diff.config_differences) - 15} 项差异*")
+    if len(diff.config_differences) > 20:
+        lines.append(f"\n*… and {len(diff.config_differences) - 20} more changes*")
     
     return "\n".join(lines) if lines else "*No changes*"
 

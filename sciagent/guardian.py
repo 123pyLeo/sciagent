@@ -19,6 +19,8 @@ from .models import RunRecord, RunSpec
 from .reporting import ReportGenerator
 from .snapshots import SnapshotManager
 from .param_parser import parse_command_params, detect_config_files, extract_python_args
+from .log_parser import extract_metrics_from_stdout
+from .code_parser import extract_config_from_command
 
 
 class RunGuardian:
@@ -41,6 +43,11 @@ class RunGuardian:
         cmd_params = self._extract_command_params()
         if cmd_params:
             self.config_values.update({"_cmd_params": cmd_params})
+        
+        # ✅ 新增：自动从 Python 代码中提取配置参数
+        code_config = extract_config_from_command(spec.command, spec.workdir)
+        if code_config:
+            self.config_values.update({"_code_config": code_config})
         
         # 自动检测配置文件
         detected_configs = detect_config_files(spec.command, spec.workdir)
@@ -158,6 +165,19 @@ class RunGuardian:
         combined: Dict[str, float] = {}
         combined.update(self._safe_float_map(self.spec.metrics))
         
+        # ✅ 新增：从 stdout 日志中自动提取指标
+        if self.log_path.exists():
+            try:
+                log_content = self.log_path.read_text(encoding='utf-8', errors='ignore')
+                stdout_metrics = extract_metrics_from_stdout(log_content)
+                if stdout_metrics:
+                    # stdout 提取的指标优先级较低，不覆盖已有值
+                    for key, value in stdout_metrics.items():
+                        if key not in combined:
+                            combined[key] = value
+            except Exception:
+                pass  # 静默失败，不影响主流程
+        
         # 确定 metrics 文件路径
         metrics_file_path = None
         
@@ -170,7 +190,7 @@ class RunGuardian:
             # 自动检测常见位置的 metrics 文件
             metrics_file_path = self._auto_detect_metrics_file()
         
-        # 读取 metrics 文件
+        # 读取 metrics 文件（优先级高于 stdout 解析）
         if metrics_file_path and metrics_file_path.exists():
             try:
                 data = json.loads(metrics_file_path.read_text())
